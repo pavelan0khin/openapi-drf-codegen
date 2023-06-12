@@ -1,3 +1,4 @@
+import logging as logger
 import pathlib
 import re
 from datetime import datetime
@@ -22,6 +23,8 @@ from openapi_drf_codegen.utils.types import (
     Schema,
     SchemaType,
 )
+
+logger.basicConfig(level=logger.INFO, format="%(message)s")
 
 
 class CodeGenerator:
@@ -354,7 +357,9 @@ class CodeGenerator:
         )
         return attribute
 
-    def _get_class_attribute(self, field_name: str, field_data: dict) -> Attribute:
+    def _get_class_attribute(
+        self, schema_name: str, field_name: str, field_data: dict
+    ) -> Attribute:
         if "type" in field_data:
             type = field_data.get("type").strip()
             method_name = f"_get_{type}"
@@ -364,6 +369,9 @@ class CodeGenerator:
             return self._get_ref(field_name, field_data)
         elif "allOf" in field_data:
             return self._get_all_of(field_name, field_data)
+        logger.warning(
+            f"Could not generate a field '{field_name}' for the '{schema_name}' serializer (functionality not implemented)"
+        )
 
     def _generate_schema(self, schema: Schema):
         imports = [Import("serializers", "rest_framework")]
@@ -371,7 +379,9 @@ class CodeGenerator:
         properties = schema.schema.raw_element.get("properties")
         attributes = []
         for prop_name, prop_value in properties.items():
-            attribute = self._get_class_attribute(prop_name, prop_value)
+            attribute = self._get_class_attribute(
+                schema.camel_case_name, prop_name, prop_value
+            )
             if attribute:
                 attributes.append(attribute)
         code = PyCode(
@@ -401,7 +411,11 @@ class CodeGenerator:
                 self._schemas.append(schema.camel_case_name)
 
     def create_package(self):
+        logger.info("Code generation started")
         self._init_build_package()
         self._sort_schemas()
         for schema in self.schemas:
             self._generate_schema_code(schema)
+        logger.info(
+            f"The package {self.package_name} with version {self.package_version} is generated in the 'build/' directory"
+        )
